@@ -1,0 +1,113 @@
+---
+title: "Weight Lifting Activity - Coursera PML Project"
+author: "Raymond Nelson"
+date: "November 23, 2014"
+output: html_document
+---
+
+# Executive summary.
+
+Machine learning is the process of developing and training a computational model to make decisions such as classification of correct or incorrect technique during exercise activities. This project involves data from Ugulino et al., (2012) weight lifting exercise dataset, which involved 6 males (age 20-28) who engaged in superised activity to simulate correct an incorrect weightlifting (curling) technique. Activity classes included the following: a) correct technique, b) throwing elbows forward, c) lifting only halfway, d) lowering only halfway, and c) throwing hips forward. Four accerometer sensors were used to record the data, including arm, forarm, belt, and dumbell. Additional information about the dataset can be found here: http://groupware.les.inf.puc-rio.br/har.
+
+The goal of the project is to develop and algorithm using the data set of 19622 training samples to predict the class of activity among five alternatives 20 samples in the test set.
+
+## Acquire and load the data.
+
+```{r}
+set.seed(1234)
+
+WLETrainingData <- read.csv("pml-training.csv", stringsAsFactors = FALSE)
+WLETestingData <- read.csv("pml-testing.csv", stringsAsFactors = FALSE)
+# names(WLETrainingData)
+# str(WLETrainingData)
+
+library(caret)
+library(randomForest)
+
+```
+
+## Clean and preprocess the data.
+
+A number of columns are non-numeric, while other have almost no variance. Some columns have a large number of missing values. These are all removed before proceeding.
+
+```{r}
+# keep numeric columns for analysis
+numIdx <- which(lapply(WLETrainingData,class) %in% c('numeric'))
+WLETrainingData2 <- WLETrainingData[,numIdx]
+WLETestingData2 <- WLETestingData[,numIdx]
+
+# remove near zero variance columns
+zeroVar <- nzv(WLETrainingData2)
+WLETrainingData3 <- WLETrainingData2[,-zeroVar]
+WLETestingData3 <- WLETestingData2[,-zeroVar]
+
+# fix missing values
+# no columns have all NA values but some have a large number so they will be removed
+naIdx <- which(colSums(is.na(WLETrainingData3)) > 0)
+WLETrainingData4 <- WLETrainingData3[,-naIdx]
+WLETestingData4 <- WLETestingData3[,-naIdx]
+# there are now 27 accelerometer variables with no missing values 
+
+# add the classe column 
+WLETrainingData4 <- cbind(WLETrainingData4, WLETrainingData$classe)
+colnames(WLETrainingData4)[28] <- "classe"
+
+# clean up a little
+rm(WLETestingData2)
+rm(WLETestingData3)
+rm(WLETrainingData2)
+rm(WLETrainingData3)
+
+```
+
+# Model development and crossvalidation
+
+A Random Forest model was applied to the training data, after partioning the training data into a training and crossvalidation set. 
+
+```{r}
+# partition the training data into a training and test set
+trainIdx <- createDataPartition(WLETrainingData$classe, list = FALSE, p = .7)
+trainingData <- WLETrainingData4[trainIdx,]
+testingData <- WLETrainingData4[-trainIdx,]
+
+mytrControl = trainControl(method = "cv", number = 5)
+myRF <- train(trainingData$classe ~.,data = trainingData, method="rf", trControl = mytrControl)
+myRF
+
+```
+
+Out of sample error is estimated by Kappa = .988 with mtry = 2.
+
+Now compare the result with the validation set.
+
+```{r}
+prediction <- predict(myRF, testingData)
+sError <- sum(prediction == testingData$classe)/nrow(testingData)
+sError
+
+```
+
+Performance with the validation set was good.
+
+## Performance with the WLE testing dataset
+
+```{r}
+
+testAnswers <- as.character(predict(myRF, WLETestingData4))
+
+
+```
+
+
+
+
+# References 
+
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3JZ6a9HxD
+
+# Creative commons license.
+
+Important: you are free to use this dataset for any purpose. This dataset is licensed under the Creative Commons license (CC BY-SA). The CC BY-SA license means you can remix, tweak, and build upon this work even for commercial purposes, as long as you credit the authors of the original work and you license your new creations under the identical terms we are licensing to you. This license is often compared to "copyleft" free and open source software licenses. All new works based on this dataset will carry the same license, so any derivatives will also allow commercial use.
+
